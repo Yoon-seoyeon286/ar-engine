@@ -1,0 +1,11 @@
+name: custom-ar-server
+runtime: node18
+build:
+  command: npm install
+start:
+  command: npm start
+env:
+  PORT: 8080
+resources:
+  memory: 512M
+  cpu: 0.5

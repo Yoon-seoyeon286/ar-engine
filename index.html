@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>서버 기반 커스텀 이미지 AR</title>
+    
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+        }
+        
+        #upload-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            overflow-y: auto;
+            z-index: 9999;
+        }
+        
+        #upload-screen.hidden {
+            display: none;
+        }
+        
+        .container {
+            background: white;
+            padding: 35px 25px;
+            border-radius: 25px;
+            box-shadow: 0 15px 50px rgba(0,0,0,0.4);
+            max-width: 550px;
+            width: 90%;
+            margin: 40px auto 60px auto;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+            text-align: center;
+        }
+        
+        .subtitle {
+            color: #666;
+            text-align: center;
+            margin-bottom: 25px;
+            font-size: 14px;
+        }
+        
+        .badge {
+            display: inline-block;
+            background: #4CAF50;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            margin-bottom: 20px;
+        }
+        
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 20px;
+            padding: 45px 25px;
+            margin: 25px 0;
+            background: linear-gradient(to bottom, #f8f9ff, #ffffff);
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.3s;
+        }
+        
+        .upload-area:hover {
+            background: #f0f3ff;
+            border-color: #5568d3;
+            transform: translateY(-2px);
+        }
+        
+        .upload-icon {
+            font-size: 70px;
+            margin-bottom: 15px;
+            animation: bounce 2s infinite;
+        }
+        
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        
+        #image-upload {
+            display: none;
+        }
+        
+        .button {
+            background: #667eea;
+            color: white;
+            padding: 16px 35px;
+            border: none;
+            border-radius: 30px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            max-width: 320px;
+            margin: 12px auto;
+            display: block;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+        }
+        
+        .button:disabled {
+            background: #ccc;
+            box-shadow: none;
+            cursor: not-allowed;
+        }
+        
+        .button.secondary {
+            background: #6c757d;
+            box-shadow: 0 4px 15px rgba(108, 117, 125, 0.4);
+        }
+        
+        #preview-section {
+            display: none;
+            margin-top: 25px;
+        }
+        
+        #preview-image {
+            max-width: 100%;
+            max-height: 280px;
+            border-radius: 20px;
+            margin: 20px auto;
+            display: block;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.25);
+        }
+        
+        #loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.95);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            flex-direction: column;
+        }
+        
+        .loading-content {
+            text-align: center;
+            color: white;
+        }
+        
+        .spinner {
+            border: 6px solid #f3f3f3;
+            border-top: 6px solid #667eea;
+            border-radius: 50%;
+            width: 70px;
+            height: 70px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 25px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        #progress-bar {
+            width: 300px;
+            height: 8px;
+            background: #333;
+            border-radius: 10px;
+            margin: 20px auto;
+            overflow: hidden;
+        }
+        
+        #progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.3s;
+        }
+        
+        #progress-text {
+            font-size: 16px;
+            margin-top: 10px;
+            color: #bbb;
+        }
+        
+        #back-button {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.75);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 25px;
+            cursor: pointer;
+            z-index: 1000;
+            display: none;
+            font-weight: 600;
+        }
+        
+        #instructions {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.95);
+            color: white;
+            padding: 40px;
+            border-radius: 25px;
+            z-index: 1000;
+            display: none;
+            text-align: center;
+            max-width: 90%;
+            box-shadow: 0 10px 50px rgba(0,0,0,0.5);
+        }
+        
+        .info-box {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .info-box h4 {
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+        
+        .info-box ul {
+            padding-left: 20px;
+            margin: 10px 0;
+            line-height: 1.8;
+        }
+        
+        .server-status {
+            text-align: center;
+            margin: 20px 0;
+            padding: 12px;
+            background: #e8f5e9;
+            border-radius: 10px;
+            color: #2e7d32;
+            font-weight: 600;
+        }
+        
+        .server-status.offline {
+            background: #ffebee;
+            color: #c62828;
+        }
+    </style>
+</head>
+<body>
+    <button id="back-button" onclick="goBack()">← 처음으로</button>
+    
+    <div id="upload-screen">
+        <div class="container">
+            <div style="text-align: center;">
+                <span class="badge">서버 기반 처리</span>
+            </div>
+            <h1>🎯 커스텀 이미지 AR</h1>
+            <p class="subtitle">
+                8th Wall 방식의 프로페셔널 AR
+            </p>
+            
+            <div class="server-status" id="server-status">
+                🔄 서버 연결 확인 중...
+            </div>
+            
+            <div class="upload-area" onclick="document.getElementById('image-upload').click()">
+                <div class="upload-icon">📸</div>
+                <h3 style="color: #667eea; margin: 10px 0;">이미지 선택하기</h3>
+                <p style="color: #999; font-size: 14px;">클릭하여 파일 업로드</p>
+            </div>
+            
+            <input type="file" id="image-upload" accept="image/*">
+            
+            <div class="info-box">
+                <h4>✨ 서버 기반 처리의 장점</h4>
+                <ul>
+                    <li>빠른 이미지 분석 속도</li>
+                    <li>높은 인식 정확도</li>
+                    <li>안정적인 AR 트래킹</li>
+                    <li>대용량 이미지 지원</li>
+                </ul>
+            </div>
+            
+            <div id="preview-section">
+                <h3 style="text-align: center; color: #333; margin-bottom: 15px;">
+                    업로드된 이미지
+                </h3>
+                <img id="preview-image" alt="미리보기">
+                <p style="text-align: center; color: #666; margin: 15px 0;">
+                    서버에서 이 이미지를 분석합니다
+                </p>
+                <button class="button" id="start-button" onclick="startAR()">
+                    🚀 AR 시작하기
+                </button>
+                <button class="button secondary" onclick="cancelUpload()">
+                    다시 선택
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="loading-screen">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <h2 style="font-size: 28px; margin-bottom: 15px;">처리 중...</h2>
+            <div id="progress-bar">
+                <div id="progress-fill"></div>
+            </div>
+            <p id="progress-text">서버 연결 중...</p>
+            <p style="font-size: 13px; margin-top: 25px; color: #888;">
+                서버에서 이미지 특징점을 추출하고 있습니다
+            </p>
+        </div>
+    </div>
+    
+    <div id="instructions">
+        <h2 style="margin-bottom: 25px; font-size: 26px;">📱 사용 방법</h2>
+        <p style="line-height: 2.2; font-size: 17px;">
+            1. 업로드한 이미지를<br>
+            2. 다른 화면에 띄우거나 출력<br>
+            3. 카메라로 비추세요<br><br>
+            <strong style="color: #4CAF50; font-size: 20px;">
+                AR 객체가 나타납니다! 🎉
+            </strong>
+        </p>
+        <button class="button" onclick="closeInstructions()" style="margin-top: 25px;">
+            시작하기
+        </button>
+    </div>
+    
+    <a-scene
+        id="ar-scene"
+        embedded
+        arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono;"
+        vr-mode-ui="enabled: false"
+        renderer="logarithmicDepthBuffer: true; precision: medium;"
+        style="display: none;">
+        
+        <a-marker type="pattern" id="custom-marker" url="">
+            <a-box 
+                position="0 0.5 0" 
+                scale="0.8 0.8 0.8"
+                material="color: #FF0000; metalness: 0.8; roughness: 0.2;" 
+                animation="property: rotation; to: 0 360 0; loop: true; dur: 4000; easing: linear">
+            </a-box>
+            
+            <a-sphere 
+                position="0 1.4 0" 
+                radius="0.35" 
+                material="color: #00FF00; metalness: 0.7; roughness: 0.3;"
+                animation="property: position; to: 0 1.8 0; dir: alternate; loop: true; dur: 1500; easing: easeInOutSine">
+            </a-sphere>
+            
+            <a-cone 
+                position="-1 0.4 0" 
+                radius-bottom="0.3" 
+                height="0.7"
+                material="color: #0000FF; metalness: 0.6; roughness: 0.4;"
+                animation="property: rotation; to: 0 0 360; loop: true; dur: 3000; easing: linear">
+            </a-cone>
+            
+            <a-cylinder 
+                position="1 0.4 0" 
+                radius="0.25" 
+                height="0.7"
+                material="color: #FFFF00; metalness: 0.7; roughness: 0.3;"
+                animation="property: scale; to: 1.3 1.3 1.3; dir: alternate; loop: true; dur: 2000">
+            </a-cylinder>
+            
+            <a-light type="point" intensity="1.5" position="2 3 1"></a-light>
+            <a-light type="ambient" intensity="0.6"></a-light>
+        </a-marker>
+
+        <a-entity camera></a-entity>
+    </a-scene>
+
+    <script>
+        // 서버 설정
+        const SERVER_URL = 'YOUR_RUNWAY_SERVER_URL';  // 여기에 Runway 서버 URL 입력
+        
+        let uploadedImage = null;
+        let generatedMarkerUrl = null;
+        
+        // 페이지 로드시 서버 상태 확인
+        window.onload = async function() {
+            await checkServerStatus();
+        };
+        
+        // 서버 상태 확인
+        async function checkServerStatus() {
+            const statusElement = document.getElementById('server-status');
+            
+            try {
+                const response = await fetch(`${SERVER_URL}/health`, {
+                    method: 'GET',
+                    timeout: 5000
+                });
+                
+                if (response.ok) {
+                    statusElement.textContent = '✅ 서버 연결됨 - 준비 완료';
+                    statusElement.classList.remove('offline');
+                } else {
+                    throw new Error('서버 응답 없음');
+                }
+            } catch (error) {
+                statusElement.textContent = '⚠️ 서버 오프라인 - 데모 모드';
+                statusElement.classList.add('offline');
+                console.warn('서버 연결 실패:', error);
+            }
+        }
+        
+        // 이미지 업로드
+        document.getElementById('image-upload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            
+            if (file) {
+                // 파일 크기 체크
+                if (file.size > 10000000) {  // 10MB
+                    alert('이미지 크기는 10MB 이하여야 합니다.');
+                    return;
+                }
+                
+                const reader = new FileReader();
+                
+                reader.onload = function(event) {
+                    uploadedImage = file;
+                    document.getElementById('preview-image').src = event.target.result;
+                    document.getElementById('preview-section').style.display = 'block';
+                    
+                    setTimeout(() => {
+                        document.getElementById('start-button').scrollIntoView({ 
+                            behavior: 'smooth', 
+                            block: 'center' 
+                        });
+                    }, 100);
+                };
+                
+                reader.readAsDataURL(file);
+            }
+        });
+        
+        // AR 시작
+        async function startAR() {
+            if (!uploadedImage) {
+                alert('이미지를 먼저 선택해주세요!');
+                return;
+            }
+            
+            document.getElementById('start-button').disabled = true;
+            document.getElementById('loading-screen').style.display = 'flex';
+            
+            try {
+                // 서버로 이미지 전송 및 .patt 파일 생성
+                await uploadAndProcessImage();
+                
+                // 화면 전환
+                document.getElementById('loading-screen').style.display = 'none';
+                document.getElementById('upload-screen').classList.add('hidden');
+                document.getElementById('ar-scene').style.display = 'block';
+                document.getElementById('instructions').style.display = 'block';
+                document.getElementById('back-button').style.display = 'block';
+                
+            } catch (error) {
+                console.error('오류:', error);
+                document.getElementById('loading-screen').style.display = 'none';
+                document.getElementById('start-button').disabled = false;
+                alert('처리 중 오류가 발생했습니다.\n\n' + error.message);
+            }
+        }
+        
+        // 서버에 이미지 업로드 및 처리
+        async function uploadAndProcessImage() {
+            const formData = new FormData();
+            formData.append('image', uploadedImage);
+            
+            updateProgress(10, '서버에 이미지 업로드 중...');
+            
+            try {
+                const response = await fetch(`${SERVER_URL}/api/generate-marker`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    throw new Error('서버 처리 실패');
+                }
+                
+                updateProgress(40, '이미지 분석 중...');
+                
+                const data = await response.json();
+                
+                updateProgress(70, '마커 파일 생성 중...');
+                
+                // .patt 파일 URL 받기
+                generatedMarkerUrl = data.markerUrl;
+                
+                // 타겟 이미지 URL 받기
+                const targetImageUrl = data.targetImageUrl;
+                
+                updateProgress(90, 'AR 준비 중...');
+                
+                // AR.js에 마커 설정
+                const marker = document.getElementById('custom-marker');
+                marker.setAttribute('url', generatedMarkerUrl);
+                
+                updateProgress(100, '완료!');
+                
+                // 1초 대기
+                await new Promise(r => setTimeout(r, 1000));
+                
+                return data;
+                
+            } catch (error) {
+                // 서버 오류시 데모 모드로 전환
+                console.warn('서버 모드 실패, 데모 모드 사용:', error);
+                return await useDemoMode();
+            }
+        }
+        
+        // 데모 모드 (서버 없이 테스트)
+        async function useDemoMode() {
+            updateProgress(50, '데모 모드 - Hiro 마커 사용...');
+            
+            // Hiro 마커 사용
+            const marker = document.getElementById('custom-marker');
+            marker.setAttribute('preset', 'hiro');
+            marker.removeAttribute('url');
+            
+            updateProgress(100, '데모 준비 완료!');
+            
+            await new Promise(r => setTimeout(r, 500));
+            
+            alert('ℹ️ 데모 모드\n\n서버가 연결되지 않아 Hiro 마커를 사용합니다.\n\nHiro 마커 다운로드:\nhttps://raw.githubusercontent.com/AR-js-org/AR.js/master/data/images/hiro.png');
+            
+            return { mode: 'demo' };
+        }
+        
+        // 진행률 업데이트
+        function updateProgress(percent, text) {
+            document.getElementById('progress-fill').style.width = percent + '%';
+            document.getElementById('progress-text').textContent = text;
+        }
+        
+        // 업로드 취소
+        function cancelUpload() {
+            document.getElementById('preview-section').style.display = 'none';
+            document.getElementById('image-upload').value = '';
+            uploadedImage = null;
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        
+        // 안내 닫기
+        function closeInstructions() {
+            document.getElementById('instructions').style.display = 'none';
+        }
+        
+        // 처음으로
+        function goBack() {
+            location.reload();
+        }
+    </script>
+</body>
+</html>
