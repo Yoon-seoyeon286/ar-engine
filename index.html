@@ -3,10 +3,11 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>실제 포토카드 AR</title>
+    <title>MindAR 포토카드 AR</title>
     
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image.prod.js"></script>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
     
     <style>
         * {
@@ -16,13 +17,11 @@
         }
         
         body {
-            font-family: 'Segoe UI', Arial, sans-serif;
+            font-family: Arial, sans-serif;
         }
         
         #upload-screen {
             position: fixed;
-            top: 0;
-            left: 0;
             width: 100%;
             height: 100vh;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -36,42 +35,43 @@
         
         .container {
             background: white;
-            padding: 35px 25px;
+            padding: 40px 30px;
             border-radius: 25px;
-            box-shadow: 0 15px 50px rgba(0,0,0,0.4);
-            max-width: 550px;
+            max-width: 500px;
             width: 90%;
-            margin: 40px auto 60px auto;
+            margin: 40px auto;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
         }
         
         h1 {
-            color: #333;
-            margin-bottom: 10px;
-            font-size: 28px;
             text-align: center;
+            color: #333;
+            margin-bottom: 15px;
         }
         
         .subtitle {
-            color: #666;
             text-align: center;
-            margin-bottom: 25px;
-            font-size: 14px;
+            color: #666;
+            margin-bottom: 30px;
         }
         
         .upload-area {
             border: 3px dashed #667eea;
             border-radius: 20px;
-            padding: 45px 25px;
-            margin: 25px 0;
-            background: linear-gradient(to bottom, #f8f9ff, #ffffff);
-            cursor: pointer;
+            padding: 50px 30px;
             text-align: center;
+            cursor: pointer;
             transition: all 0.3s;
         }
         
+        .upload-area:hover {
+            background: #f0f3ff;
+            transform: translateY(-5px);
+        }
+        
         .upload-icon {
-            font-size: 70px;
-            margin-bottom: 15px;
+            font-size: 80px;
+            margin-bottom: 20px;
         }
         
         #image-upload {
@@ -81,22 +81,19 @@
         .button {
             background: #667eea;
             color: white;
-            padding: 16px 35px;
+            padding: 18px 40px;
             border: none;
             border-radius: 30px;
-            font-size: 16px;
+            font-size: 18px;
             font-weight: 600;
             cursor: pointer;
             width: 100%;
-            max-width: 320px;
-            margin: 12px auto;
-            display: block;
+            margin: 15px 0;
             transition: all 0.3s;
         }
         
         .button:disabled {
             background: #ccc;
-            cursor: not-allowed;
         }
         
         .button.secondary {
@@ -105,16 +102,14 @@
         
         #preview-section {
             display: none;
-            margin-top: 25px;
+            margin-top: 30px;
         }
         
         #preview-image {
             max-width: 100%;
-            max-height: 280px;
-            border-radius: 20px;
-            margin: 20px auto;
-            display: block;
-            box-shadow: 0 8px 30px rgba(0,0,0,0.25);
+            border-radius: 15px;
+            margin: 20px 0;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
         }
         
         #loading-screen {
@@ -128,17 +123,21 @@
             justify-content: center;
             align-items: center;
             z-index: 10000;
-            flex-direction: column;
+        }
+        
+        .loading-content {
+            text-align: center;
+            color: white;
         }
         
         .spinner {
-            border: 6px solid #f3f3f3;
-            border-top: 6px solid #667eea;
+            border: 8px solid #f3f3f3;
+            border-top: 8px solid #667eea;
             border-radius: 50%;
-            width: 70px;
-            height: 70px;
+            width: 80px;
+            height: 80px;
             animation: spin 1s linear infinite;
-            margin: 0 auto 25px;
+            margin: 0 auto 30px;
         }
         
         @keyframes spin {
@@ -146,40 +145,36 @@
             100% { transform: rotate(360deg); }
         }
         
-        #progress-text {
-            font-size: 16px;
-            color: white;
-        }
-        
         #back-button {
             position: fixed;
             top: 20px;
             left: 20px;
-            background: rgba(0,0,0,0.75);
+            background: rgba(0,0,0,0.8);
             color: white;
             border: none;
-            padding: 12px 25px;
-            border-radius: 25px;
+            padding: 15px 30px;
+            border-radius: 30px;
             cursor: pointer;
             z-index: 1000;
             display: none;
+            font-weight: 600;
         }
         
-        .info-box {
-            background: #e7f3ff;
-            border: 3px solid #2196F3;
-            border-radius: 15px;
+        .warning-box {
+            background: #fff3cd;
+            border-left: 5px solid #ffc107;
             padding: 20px;
             margin: 20px 0;
+            border-radius: 10px;
         }
         
-        .info-box h4 {
-            color: #1976D2;
+        .warning-box h4 {
+            color: #856404;
             margin-bottom: 10px;
         }
         
-        .info-box p {
-            color: #666;
+        .warning-box p {
+            color: #856404;
             line-height: 1.8;
         }
     </style>
@@ -189,39 +184,33 @@
     
     <div id="upload-screen">
         <div class="container">
-            <h1>🎯 실제 포토카드 AR</h1>
+            <h1>🎯 MindAR 포토카드</h1>
             <p class="subtitle">
-                진짜 포토카드를 타겟으로 사용
+                8th Wall 수준의 이미지 인식
             </p>
             
             <div class="upload-area" onclick="document.getElementById('image-upload').click()">
                 <div class="upload-icon">📸</div>
-                <h3 style="color: #667eea; margin: 10px 0;">포토카드 사진 업로드</h3>
-                <p style="color: #999; font-size: 14px;">실제 포토카드 이미지</p>
+                <h3 style="color: #667eea;">포토카드 업로드</h3>
+                <p style="color: #999; margin-top: 10px;">클릭하여 선택</p>
             </div>
             
             <input type="file" id="image-upload" accept="image/*">
             
-            <div class="info-box">
-                <h4>✨ 사용 방법</h4>
+            <div class="warning-box">
+                <h4>⚠️ 중요 안내</h4>
                 <p>
-                    1. 포토카드 사진을 업로드<br>
-                    2. AR 시작하기 클릭<br>
-                    3. <strong>실제 포토카드</strong>를 카메라로 비추기<br>
-                    4. AR 객체가 나타남!
+                    • 선명한 포토카드 사진 사용<br>
+                    • 서버 처리 시간: 20-60초<br>
+                    • 실제 포토카드를 카메라로 비추기
                 </p>
             </div>
             
             <div id="preview-section">
-                <h3 style="text-align: center; color: #333; margin-bottom: 15px;">
-                    업로드된 포토카드
-                </h3>
+                <h3 style="text-align: center; color: #333;">업로드된 포토카드</h3>
                 <img id="preview-image" alt="포토카드">
-                <p style="text-align: center; color: #666; margin: 15px 0;">
-                    이 포토카드를 카메라로 비추면 AR이 작동합니다
-                </p>
                 <button class="button" id="start-button" onclick="startAR()">
-                    🚀 AR 시작하기
+                    🚀 AR 처리 시작
                 </button>
                 <button class="button secondary" onclick="cancelUpload()">
                     다시 선택
@@ -231,70 +220,53 @@
     </div>
     
     <div id="loading-screen">
-        <div class="spinner"></div>
-        <p id="progress-text">처리 중...</p>
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <h2 style="font-size: 28px; margin-bottom: 20px;">처리 중...</h2>
+            <p id="progress-text" style="font-size: 16px;">서버에서 이미지 분석 중...</p>
+            <p style="font-size: 14px; margin-top: 30px; color: #aaa;">
+                30-60초 소요됩니다
+            </p>
+        </div>
     </div>
     
     <a-scene
         id="ar-scene"
+        mindar-image="autoStart: false; uiError: no; uiScanning: no;"
         embedded
-        arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono; matrixCodeType: 3x3;"
         vr-mode-ui="enabled: false"
-        renderer="logarithmicDepthBuffer: true; precision: medium;"
         style="display: none;">
         
-        <a-marker type="pattern" id="custom-marker" url="">
+        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+        
+        <a-entity mindar-image-target="targetIndex: 0">
             <a-box 
-                position="0 0.5 0" 
-                scale="1 1 1"
+                position="0 0 0" 
+                scale="1.2 1.2 1.2"
                 material="color: #FF0000; metalness: 0.8; roughness: 0.2;" 
-                animation="property: rotation; to: 0 360 0; loop: true; dur: 4000; easing: linear">
+                animation="property: rotation; to: 0 360 0; loop: true; dur: 4000">
             </a-box>
             
             <a-sphere 
-                position="0 1.5 0" 
-                radius="0.4" 
+                position="0 1.8 0" 
+                radius="0.5" 
                 material="color: #00FF00; metalness: 0.7; roughness: 0.3;"
-                animation="property: position; to: 0 2 0; dir: alternate; loop: true; dur: 1500; easing: easeInOutSine">
+                animation="property: position; to: 0 2.3 0; dir: alternate; loop: true; dur: 1500">
             </a-sphere>
             
-            <a-cone 
-                position="-1 0.5 0" 
-                radius-bottom="0.3" 
-                height="0.8"
-                material="color: #0000FF; metalness: 0.6; roughness: 0.4;"
-                animation="property: rotation; to: 0 0 360; loop: true; dur: 3000; easing: linear">
-            </a-cone>
-            
-            <a-cylinder 
-                position="1 0.5 0" 
-                radius="0.25" 
-                height="0.8"
-                material="color: #FFFF00; metalness: 0.7; roughness: 0.3;">
-            </a-cylinder>
-            
             <a-light type="point" intensity="2" position="2 4 2"></a-light>
-            <a-light type="ambient" intensity="0.6"></a-light>
-        </a-marker>
-
-        <a-entity camera></a-entity>
+        </a-entity>
     </a-scene>
 
     <script>
         const SERVER_URL = window.location.origin;
         let uploadedImage = null;
-        let generatedMarkerUrl = null;
+        let targetUrl = null;
         
-        // 이미지 업로드
         document.getElementById('image-upload').addEventListener('change', function(e) {
             const file = e.target.files[0];
             
             if (file) {
-                if (file.size > 10000000) {
-                    alert('이미지 크기는 10MB 이하여야 합니다.');
-                    return;
-                }
-                
                 const reader = new FileReader();
                 reader.onload = function(event) {
                     uploadedImage = file;
@@ -303,8 +275,7 @@
                     
                     setTimeout(() => {
                         document.getElementById('start-button').scrollIntoView({ 
-                            behavior: 'smooth', 
-                            block: 'center' 
+                            behavior: 'smooth' 
                         });
                     }, 100);
                 };
@@ -312,7 +283,6 @@
             }
         });
         
-        // AR 시작
         async function startAR() {
             if (!uploadedImage) {
                 alert('이미지를 먼저 선택해주세요!');
@@ -323,58 +293,54 @@
             document.getElementById('loading-screen').style.display = 'flex';
             
             try {
-                await uploadAndProcessImage();
+                // 서버에 업로드
+                const formData = new FormData();
+                formData.append('image', uploadedImage);
                 
+                document.getElementById('progress-text').textContent = '서버에 업로드 중...';
+                
+                const response = await fetch(`${SERVER_URL}/api/generate-marker`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) throw new Error('서버 오류');
+                
+                document.getElementById('progress-text').textContent = '이미지 분석 중... (30초 소요)';
+                
+                const data = await response.json();
+                targetUrl = data.targetUrl;
+                
+                document.getElementById('progress-text').textContent = 'AR 준비 중...';
+                
+                // MindAR 설정
+                const sceneEl = document.querySelector('a-scene');
+                sceneEl.setAttribute('mindar-image', `imageTargetSrc: ${targetUrl}; autoStart: false;`);
+                
+                // 로딩 화면 숨기기
                 document.getElementById('loading-screen').style.display = 'none';
                 document.getElementById('upload-screen').classList.add('hidden');
                 document.getElementById('ar-scene').style.display = 'block';
                 document.getElementById('back-button').style.display = 'block';
                 
-                setTimeout(() => {
-                    alert('📱 사용 방법\n\n실제 포토카드를 카메라로 비춰보세요!\n\n✅ 원본 포토카드 사용\n✅ 밝은 곳에서 테스트\n✅ 30-50cm 거리 유지');
-                }, 1000);
+                // MindAR 시작
+                const arSystem = sceneEl.systems['mindar-image-system'];
+                await arSystem.start();
+                
+                alert('✅ 준비 완료!\n\n실제 포토카드를 카메라로 비춰보세요.');
                 
             } catch (error) {
                 console.error('오류:', error);
                 document.getElementById('loading-screen').style.display = 'none';
                 document.getElementById('start-button').disabled = false;
-                alert('처리 중 오류: ' + error.message);
+                alert('처리 실패: ' + error.message);
             }
-        }
-        
-        // 서버에 업로드
-        async function uploadAndProcessImage() {
-            const formData = new FormData();
-            formData.append('image', uploadedImage);
-            
-            document.getElementById('progress-text').textContent = '이미지 분석 중...';
-            
-            const response = await fetch(`${SERVER_URL}/api/generate-marker`, {
-                method: 'POST',
-                body: formData
-            });
-            
-            if (!response.ok) {
-                throw new Error('서버 처리 실패: ' + response.status);
-            }
-            
-            const data = await response.json();
-            console.log('서버 응답:', data);
-            
-            generatedMarkerUrl = data.markerUrl;
-            
-            // 마커 설정
-            const marker = document.getElementById('custom-marker');
-            marker.setAttribute('url', generatedMarkerUrl);
-            
-            document.getElementById('progress-text').textContent = '완료!';
         }
         
         function cancelUpload() {
             document.getElementById('preview-section').style.display = 'none';
             document.getElementById('image-upload').value = '';
             uploadedImage = null;
-            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
         
         function goBack() {
