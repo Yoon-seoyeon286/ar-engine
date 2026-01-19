@@ -276,11 +276,11 @@
     <div id="upload-screen">
         <div class="container">
             <div style="text-align: center;">
-                <span class="badge">서버 기반 처리</span>
+                <span class="badge">Railway 서버</span>
             </div>
             <h1>🎯 커스텀 이미지 AR</h1>
             <p class="subtitle">
-                8th Wall 방식의 프로페셔널 AR
+                서버 기반 프로페셔널 AR
             </p>
             
             <div class="server-status" id="server-status">
@@ -340,16 +340,15 @@
     <div id="instructions">
         <h2 style="margin-bottom: 25px; font-size: 26px;">📱 사용 방법</h2>
         <p style="line-height: 2.2; font-size: 17px;">
-            1. 업로드한 이미지를<br>
-            2. 다른 화면에 띄우거나 출력<br>
+            1. 다운로드 버튼으로 타겟 이미지 저장<br>
+            2. 타겟 이미지를 다른 화면에 표시하거나 출력<br>
             3. 카메라로 비추세요<br><br>
             <strong style="color: #4CAF50; font-size: 20px;">
                 AR 객체가 나타납니다! 🎉
             </strong>
         </p>
-        <button class="button" onclick="closeInstructions()" style="margin-top: 25px;">
-            시작하기
-        </button>
+        <button class="button" onclick="downloadTarget()">타겟 이미지 다운로드</button>
+        <button class="button secondary" onclick="closeInstructions()">시작하기</button>
     </div>
     
     <a-scene
@@ -399,11 +398,12 @@
     </a-scene>
 
     <script>
-        // 서버 설정
-        const SERVER_URL = 'YOUR_RUNWAY_SERVER_URL';  // 여기에 Runway 서버 URL 입력
+        // 서버 URL 자동 감지 (Railway 배포시 자동으로 작동)
+        const SERVER_URL = window.location.origin;
         
         let uploadedImage = null;
         let generatedMarkerUrl = null;
+        let targetImageUrl = null;
         
         // 페이지 로드시 서버 상태 확인
         window.onload = async function() {
@@ -415,19 +415,18 @@
             const statusElement = document.getElementById('server-status');
             
             try {
-                const response = await fetch(`${SERVER_URL}/health`, {
-                    method: 'GET',
-                    timeout: 5000
-                });
+                const response = await fetch(`${SERVER_URL}/health`);
                 
                 if (response.ok) {
+                    const data = await response.json();
                     statusElement.textContent = '✅ 서버 연결됨 - 준비 완료';
                     statusElement.classList.remove('offline');
+                    console.log('서버 상태:', data);
                 } else {
                     throw new Error('서버 응답 없음');
                 }
             } catch (error) {
-                statusElement.textContent = '⚠️ 서버 오프라인 - 데모 모드';
+                statusElement.textContent = '⚠️ 서버 오프라인';
                 statusElement.classList.add('offline');
                 console.warn('서버 연결 실패:', error);
             }
@@ -438,8 +437,7 @@
             const file = e.target.files[0];
             
             if (file) {
-                // 파일 크기 체크
-                if (file.size > 10000000) {  // 10MB
+                if (file.size > 10000000) {
                     alert('이미지 크기는 10MB 이하여야 합니다.');
                     return;
                 }
@@ -474,10 +472,8 @@
             document.getElementById('loading-screen').style.display = 'flex';
             
             try {
-                // 서버로 이미지 전송 및 .patt 파일 생성
                 await uploadAndProcessImage();
                 
-                // 화면 전환
                 document.getElementById('loading-screen').style.display = 'none';
                 document.getElementById('upload-screen').classList.add('hidden');
                 document.getElementById('ar-scene').style.display = 'block';
@@ -499,64 +495,45 @@
             
             updateProgress(10, '서버에 이미지 업로드 중...');
             
-            try {
-                const response = await fetch(`${SERVER_URL}/api/generate-marker`, {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                if (!response.ok) {
-                    throw new Error('서버 처리 실패');
-                }
-                
-                updateProgress(40, '이미지 분석 중...');
-                
-                const data = await response.json();
-                
-                updateProgress(70, '마커 파일 생성 중...');
-                
-                // .patt 파일 URL 받기
-                generatedMarkerUrl = data.markerUrl;
-                
-                // 타겟 이미지 URL 받기
-                const targetImageUrl = data.targetImageUrl;
-                
-                updateProgress(90, 'AR 준비 중...');
-                
-                // AR.js에 마커 설정
-                const marker = document.getElementById('custom-marker');
-                marker.setAttribute('url', generatedMarkerUrl);
-                
-                updateProgress(100, '완료!');
-                
-                // 1초 대기
-                await new Promise(r => setTimeout(r, 1000));
-                
-                return data;
-                
-            } catch (error) {
-                // 서버 오류시 데모 모드로 전환
-                console.warn('서버 모드 실패, 데모 모드 사용:', error);
-                return await useDemoMode();
+            const response = await fetch(`${SERVER_URL}/api/generate-marker`, {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!response.ok) {
+                throw new Error('서버 처리 실패');
             }
+            
+            updateProgress(50, '이미지 분석 중...');
+            
+            const data = await response.json();
+            
+            updateProgress(80, 'AR 준비 중...');
+            
+            generatedMarkerUrl = data.markerUrl;
+            targetImageUrl = data.targetImageUrl;
+            
+            const marker = document.getElementById('custom-marker');
+            marker.setAttribute('url', generatedMarkerUrl);
+            
+            updateProgress(100, '완료!');
+            
+            await new Promise(r => setTimeout(r, 1000));
         }
         
-        // 데모 모드 (서버 없이 테스트)
-        async function useDemoMode() {
-            updateProgress(50, '데모 모드 - Hiro 마커 사용...');
+        // 타겟 이미지 다운로드
+        function downloadTarget() {
+            if (!targetImageUrl) {
+                alert('먼저 이미지를 업로드하고 AR을 시작해주세요!');
+                return;
+            }
             
-            // Hiro 마커 사용
-            const marker = document.getElementById('custom-marker');
-            marker.setAttribute('preset', 'hiro');
-            marker.removeAttribute('url');
+            const link = document.createElement('a');
+            link.href = targetImageUrl;
+            link.download = 'ar-target.png';
+            link.click();
             
-            updateProgress(100, '데모 준비 완료!');
-            
-            await new Promise(r => setTimeout(r, 500));
-            
-            alert('ℹ️ 데모 모드\n\n서버가 연결되지 않아 Hiro 마커를 사용합니다.\n\nHiro 마커 다운로드:\nhttps://raw.githubusercontent.com/AR-js-org/AR.js/master/data/images/hiro.png');
-            
-            return { mode: 'demo' };
+            alert('✅ 타겟 이미지가 다운로드되었습니다!\n\n1. 다른 화면에 띄우거나 출력\n2. 카메라로 비추세요');
         }
         
         // 진행률 업데이트

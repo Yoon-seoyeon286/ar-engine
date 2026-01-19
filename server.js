@@ -5,27 +5,22 @@ const sharp = require('sharp');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs').promises;
-const { exec } = require('child_process');
-const util = require('util');
-
-const execPromise = util.promisify(exec);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// CORS 설정
-app.use(cors());
+// CORS 설정 - 모든 도메인 허용
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type']
+}));
+
 app.use(express.json());
 app.use(express.static('public'));
 
-// 파일 업로드 설정
-const storage = multer.diskStorage({
-    destination: './uploads/',
-    filename: (req, file, cb) => {
-        const uniqueName = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, uniqueName + path.extname(file.originalname));
-    }
-});
+// 업로드된 파일을 메모리에 저장 (Railway는 임시 파일 시스템 사용)
+const storage = multer.memoryStorage();
 
 const upload = multer({ 
     storage: storage,
@@ -42,24 +37,34 @@ const upload = multer({
     }
 });
 
-// 폴더 생성
+// 임시 디렉토리 생성 (Railway 환경)
 async function ensureDirectories() {
-    const dirs = ['./uploads', './markers', './public/targets'];
+    const dirs = ['./public', './public/markers', './public/targets'];
     for (const dir of dirs) {
         try {
             await fs.mkdir(dir, { recursive: true });
         } catch (err) {
-            console.error(`폴더 생성 오류 ${dir}:`, err);
+            if (err.code !== 'EEXIST') {
+                console.error(`폴더 생성 오류 ${dir}:`, err);
+            }
         }
     }
 }
 
-// 서버 시작시 폴더 생성
 ensureDirectories();
+
+// 루트 경로 - HTML 제공
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
 
 // 헬스 체크
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok', message: 'Server is running' });
+    res.json({ 
+        status: 'ok', 
+        message: 'Server is running',
+        timestamp: new Date().toISOString()
+    });
 });
 
 // 마커 생성 API
@@ -69,41 +74,39 @@ app.post('/api/generate-marker', upload.single('image'), async (req, res) => {
             return res.status(400).json({ error: '이미지가 업로드되지 않았습니다.' });
         }
 
-        const inputPath = req.file.path;
-        const filename = path.parse(req.file.filename).name;
+        const filename = Date.now() + '-' + Math.round(Math.random() * 1E9);
         
         console.log('이미지 처리 시작:', filename);
         
-        // 1단계: 이미지 최적화
-        const optimizedPath = `./uploads/${filename}-optimized.jpg`;
-        await sharp(inputPath)
+        // 1단계: 이미지 최적화 (메모리에서 처리)
+        const optimizedBuffer = await sharp(req.file.buffer)
             .resize(512, 512, { fit: 'inside' })
             .jpeg({ quality: 90 })
-            .toFile(optimizedPath);
+            .toBuffer();
         
         console.log('이미지 최적화 완료');
         
         // 2단계: 타겟 이미지 생성 (테두리 추가)
         const targetPath = `./public/targets/${filename}.png`;
-        await createTargetImage(optimizedPath, targetPath);
+        await createTargetImage(optimizedBuffer, targetPath);
         
         console.log('타겟 이미지 생성 완료');
         
         // 3단계: .patt 파일 생성
-        // AR.js marker generator 사용
-        const markerPath = `./markers/${filename}.patt`;
-        await generatePattFile(optimizedPath, markerPath);
+        const markerPath = `./public/markers/${filename}.patt`;
+        await generatePattFile(optimizedBuffer, markerPath);
         
         console.log('마커 파일 생성 완료');
         
-        // 원본 파일 삭제
-        await fs.unlink(inputPath);
+        // 응답 - Railway URL 사용
+        const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN 
+            ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` 
+            : `http://localhost:${PORT}`;
         
-        // 응답
         res.json({
             success: true,
-            markerUrl: `/markers/${filename}.patt`,
-            targetImageUrl: `/targets/${filename}.png`,
+            markerUrl: `${baseUrl}/markers/${filename}.patt`,
+            targetImageUrl: `${baseUrl}/targets/${filename}.png`,
             message: '마커가 성공적으로 생성되었습니다.'
         });
         
@@ -117,16 +120,24 @@ app.post('/api/generate-marker', upload.single('image'), async (req, res) => {
 });
 
 // 타겟 이미지 생성 (테두리 추가)
-async function createTargetImage(inputPath, outputPath) {
+async function createTargetImage(imageBuffer, outputPath) {
     const borderSize = 50;
     const imageSize = 412;
     
-    // 이미지 로드
-    const image = await sharp(inputPath)
+    // 이미지 리사이즈
+    const resizedImage = await sharp(imageBuffer)
         .resize(imageSize, imageSize, { fit: 'cover' })
         .toBuffer();
     
-    // 테두리가 있는 캔버스 생성
+    // SVG 테두리 생성
+    const svgBorder = Buffer.from(`
+        <svg width="512" height="512">
+            <rect width="512" height="512" fill="black"/>
+            <rect x="40" y="40" width="432" height="432" fill="white"/>
+        </svg>
+    `);
+    
+    // 테두리가 있는 이미지 생성
     await sharp({
         create: {
             width: 512,
@@ -136,20 +147,13 @@ async function createTargetImage(inputPath, outputPath) {
         }
     })
     .composite([
-        // 검은 외부 테두리
         {
-            input: Buffer.from(`
-                <svg width="512" height="512">
-                    <rect width="512" height="512" fill="black"/>
-                    <rect x="40" y="40" width="432" height="432" fill="white"/>
-                </svg>
-            `),
+            input: svgBorder,
             top: 0,
             left: 0
         },
-        // 이미지
         {
-            input: image,
+            input: resizedImage,
             top: borderSize,
             left: borderSize
         }
@@ -159,40 +163,41 @@ async function createTargetImage(inputPath, outputPath) {
 }
 
 // .patt 파일 생성
-async function generatePattFile(imagePath, outputPath) {
-    // 간단한 패턴 파일 생성
-    // 실제로는 AR.js marker training tool을 사용하거나
-    // OpenCV를 사용하여 특징점을 추출해야 합니다
+async function generatePattFile(imageBuffer, outputPath) {
+    // 이미지에서 실제 패턴 추출
+    const image = sharp(imageBuffer);
+    const { data, info } = await image
+        .resize(16, 16, { fit: 'fill' })
+        .raw()
+        .toBuffer({ resolveWithObject: true });
     
-    // 여기서는 간단한 데모용 패턴 생성
-    const pattern = generateSimplePattern();
-    await fs.writeFile(outputPath, pattern);
-}
-
-// 간단한 패턴 데이터 생성 (데모용)
-function generateSimplePattern() {
-    // AR.js .patt 파일 형식
-    // 16x16 그리드, 각 셀은 0-255 값
     let pattern = '';
     
-    for (let i = 0; i < 3; i++) {  // RGB 3개 채널
+    // RGB 3개 채널에 대해 16x16 그리드 생성
+    for (let channel = 0; channel < 3; channel++) {
         for (let y = 0; y < 16; y++) {
             const row = [];
             for (let x = 0; x < 16; x++) {
-                // 랜덤한 패턴 생성 (실제로는 이미지 분석 필요)
-                const value = Math.floor(Math.random() * 256);
+                const pixelIndex = (y * 16 + x) * info.channels;
+                const value = data[pixelIndex + channel];
                 row.push(value.toString().padStart(3, ' '));
             }
             pattern += row.join(' ') + '\n';
         }
-        if (i < 2) pattern += '\n';
+        if (channel < 2) pattern += '\n';
     }
     
-    return pattern;
+    await fs.writeFile(outputPath, pattern);
 }
 
-// 마커 파일 제공
-app.use('/markers', express.static('markers'));
+// 정적 파일 제공
+app.use('/markers', express.static(path.join(__dirname, 'public/markers')));
+app.use('/targets', express.static(path.join(__dirname, 'public/targets')));
+
+// 404 처리
+app.use((req, res) => {
+    res.status(404).json({ error: '요청한 리소스를 찾을 수 없습니다.' });
+});
 
 // 에러 핸들링
 app.use((error, req, res, next) => {
@@ -203,7 +208,10 @@ app.use((error, req, res, next) => {
     });
 });
 
-app.listen(PORT, () => {
-    console.log(`서버가 포트 ${PORT}에서 실행 중입니다.`);
-    console.log(`http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 서버가 포트 ${PORT}에서 실행 중입니다.`);
+    console.log(`📍 Local: http://localhost:${PORT}`);
+    if (process.env.RAILWAY_PUBLIC_DOMAIN) {
+        console.log(`🌐 Public: https://${process.env.RAILWAY_PUBLIC_DOMAIN}`);
+    }
 });

@@ -1,0 +1,7 @@
+node_modules/
+.env
+uploads/
+public/markers/
+public/targets/
+*.log
+.DS_Store
